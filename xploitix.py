@@ -18,14 +18,6 @@ for lib in required_libs:
     if importlib.util.find_spec(lib) is None:
         subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
 
-# Ensure Playwright browsers are installed when the package is available
-try:
-    if importlib.util.find_spec('playwright') is not None:
-        print('Ensuring Playwright browsers are installed (this may take a while)...')
-        subprocess.check_call([sys.executable, "-m", "playwright", "install"])
-except Exception as _e:
-    # Non-fatal: continue even if install fails here
-    print('Warning: failed to run `playwright install` automatically.')
 
 import pyfiglet
 
@@ -143,3 +135,4 @@ elif choice == "5":
 else:
     console.print("[bold red]Invalid choice[/bold red]")
     console.input("[bold #00fc1d]Press Enter to return...[/bold #00fc1d]")
+
