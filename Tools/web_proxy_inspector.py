@@ -1,50 +1,63 @@
-from playwright.sync_api import sync_playwright
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.align import Align
+from mitmproxy import http
+from mitmproxy.tools.dump import DumpMaster
+from mitmproxy.options import Options
+import threading
 import time
-import json
 
 console = Console()
+requests_log = []
+
+class WebProxyAddon:
+    def request(self, flow: http.HTTPFlow):
+        if flow.request.headers.get("content-type", "").startswith(("application/json", "application/x-www-form-urlencoded")):
+            requests_log.append({
+                "method": flow.request.method,
+                "url": flow.request.url,
+                "headers": dict(flow.request.headers),
+                "post_data": flow.request.get_text(),
+                "status": None,
+                "response": None
+            })
+
+    def response(self, flow: http.HTTPFlow):
+        for r in requests_log:
+            if r["url"] == flow.request.url:
+                r["status"] = flow.response.status_code
+                try:
+                    r["response"] = flow.response.get_text()
+                except:
+                    r["response"] = "Binary / Empty"
+
+
+def start_proxy():
+    opts = Options(listen_host="0.0.0.0", listen_port=8080)
+    m = DumpMaster(opts, with_termlog=False, with_dumper=False)
+    m.addons.add(WebProxyAddon())
+    m.run()
+
 
 def web_proxy_inspector():
-    console.print(Panel(Align.center("Web Proxy Inspector Running", vertical="middle"), style="bold yellow"))
-    url = console.input("[#abeb34]Enter Website URL: [/#abeb34]")
+    console.print(
+        Panel(
+            Align.center("Web Proxy Inspector Running\nProxy: 127.0.0.1:8080", vertical="middle"),
+            style="bold yellow"
+        )
+    )
 
-    requests_log = []
+    t = threading.Thread(target=start_proxy, daemon=True)
+    t.start()
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+    console.print("[green]▶ Set your browser proxy to 127.0.0.1 : 8080")
+    console.print("[green]▶ Open the website manually and browse")
+    console.print("[yellow]▶ Capturing for 20 seconds...\n")
 
-        def handle_request(req):
-            if req.resource_type in ["xhr", "fetch"]:
-                requests_log.append({
-                    "url": req.url,
-                    "method": req.method,
-                    "headers": req.headers,
-                    "post_data": req.post_data
-                })
+    time.sleep(20)
 
-        def handle_response(res):
-            for r in requests_log:
-                if r["url"] == res.url:
-                    try:
-                        r["status"] = res.status
-                        r["response"] = res.text()
-                    except:
-                        r["response"] = "Binary / Empty"
-
-        page.on("request", handle_request)
-        page.on("response", handle_response)
-
-        page.goto(url)
-        time.sleep(10)
-        browser.close()
-
-    table = Table(title="Captured XHR / Fetch Requests")
+    table = Table(title="Captured Requests")
     table.add_column("No", justify="center")
     table.add_column("Method")
     table.add_column("URL", overflow="fold")
@@ -54,16 +67,16 @@ def web_proxy_inspector():
 
     console.print(table)
 
+    if not requests_log:
+        console.print("[red]No requests captured.")
+        return
+
     choice = int(console.input("\n[#ffcc00]Select Request Number: [/#ffcc00]")) - 1
     option = console.input("[#ff6666]1.Response  2.Payload → [/#ff6666]")
 
     selected = requests_log[choice]
 
     if option == "1":
-        content = selected.get("response", "No Response")
-        console.print(Panel(content[:5000], title="Response", style="cyan"))
+        console.print(Panel(selected.get("response", "No Response"), title="Response", style="cyan"))
     else:
-        payload = selected.get("post_data") or "No Payload"
-        console.print(Panel(payload, title="Payload", style="green"))
-
-
+        console.print(Panel(selected.get("post_data") or "No Payload", title="Payload", style="green"))
