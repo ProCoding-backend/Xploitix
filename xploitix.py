@@ -11,13 +11,12 @@ required_libs = [
     "requests",
     "pyngrok",
     "psutil",
-    "playwright",
+    "mitmproxy",   # ← ADDED
 ]
 
 for lib in required_libs:
     if importlib.util.find_spec(lib) is None:
         subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-
 
 import pyfiglet
 
@@ -135,4 +134,5 @@ elif choice == "5":
 else:
     console.print("[bold red]Invalid choice[/bold red]")
     console.input("[bold #00fc1d]Press Enter to return...[/bold #00fc1d]")
+
 
